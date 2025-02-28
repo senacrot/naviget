@@ -1,7 +1,10 @@
-import time 
+import time
 import re
 import requests
 import logging
+import tempfile
+import os
+import shutil
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -49,27 +52,41 @@ def register_account_selenium(email, password, referral_code):
     logging.info("Mengatur browser Chrome dalam mode headless...")
     chrome_options = Options()
     chrome_options.add_argument("--headless")  # Mode headless (tanpa GUI)
-    driver = webdriver.Chrome(options=chrome_options)
+    chrome_options.add_argument("--no-sandbox")  # Tambahan untuk lingkungan tanpa GUI
+    chrome_options.add_argument("--disable-dev-shm-usage")  # Mengatasi masalah resource
 
-    logging.info("Membuka halaman pendaftaran...")
-    driver.get("https://dataquest.nvg8.io/signup")
+    # Buat direktori data pengguna yang unik
+    user_data_dir = tempfile.mkdtemp()
+    chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
 
-    logging.info("Mengisi formulir pendaftaran...")
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "email"))).send_keys(email)
-    driver.find_element(By.NAME, "password").send_keys(password)
-    driver.find_element(By.NAME, "referral").send_keys(referral_code)
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        logging.info("Membuka halaman pendaftaran...")
+        driver.get("https://dataquest.nvg8.io/signup")
 
-    logging.info("Mengklik tombol pendaftaran...")
-    sign_up_button = WebDriverWait(driver, 15).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
-    )
-    driver.execute_script("arguments[0].scrollIntoView();", sign_up_button)
-    time.sleep(1)
-    sign_up_button.click()
+        logging.info("Mengisi formulir pendaftaran...")
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "email"))).send_keys(email)
+        driver.find_element(By.NAME, "password").send_keys(password)
+        driver.find_element(By.NAME, "referral").send_keys(referral_code)
 
-    logging.info("✅ Akun berhasil didaftarkan, menunggu email verifikasi...")
-    time.sleep(10)
-    driver.quit()
+        logging.info("Mengklik tombol pendaftaran...")
+        sign_up_button = WebDriverWait(driver, 15).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']"))
+        )
+        driver.execute_script("arguments[0].scrollIntoView();", sign_up_button)
+        time.sleep(1)
+        sign_up_button.click()
+
+        logging.info("✅ Akun berhasil didaftarkan, menunggu email verifikasi...")
+        time.sleep(10)
+    except Exception as e:
+        logging.error(f"❌ Terjadi kesalahan saat mendaftar: {e}")
+    finally:
+        if 'driver' in locals():
+            driver.quit()
+        # Hapus direktori data pengguna beserta isinya
+        if os.path.exists(user_data_dir):
+            shutil.rmtree(user_data_dir)  # Menggunakan shutil.rmtree() untuk menghapus direktori dan isinya
 
 def get_verification_link(sid_token, email_address):
     """Mendapatkan link verifikasi dari email menggunakan GuerrillaMail"""
@@ -129,13 +146,27 @@ def verify_account(verification_link):
     logging.info("Mengatur browser Chrome dalam mode headless...")
     chrome_options = Options()
     chrome_options.add_argument("--headless")
-    driver = webdriver.Chrome(options=chrome_options)
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
 
-    logging.info("Membuka link verifikasi...")
-    driver.get(verification_link)
-    logging.info("✅ Akun berhasil diverifikasi!")
-    time.sleep(5)
-    driver.quit()
+    # Buat direktori data pengguna yang unik
+    user_data_dir = tempfile.mkdtemp()
+    chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        logging.info("Membuka link verifikasi...")
+        driver.get(verification_link)
+        logging.info("✅ Akun berhasil diverifikasi!")
+        time.sleep(5)
+    except Exception as e:
+        logging.error(f"❌ Terjadi kesalahan saat memverifikasi akun: {e}")
+    finally:
+        if 'driver' in locals():
+            driver.quit()
+        # Hapus direktori data pengguna beserta isinya
+        if os.path.exists(user_data_dir):
+            shutil.rmtree(user_data_dir)
 
 if __name__ == "__main__":
     while True:
@@ -144,7 +175,7 @@ if __name__ == "__main__":
             jumlah_pendaftaran = int(jumlah_pendaftaran_input)
             break
         logging.error("❌ Harap masukkan angka yang valid.")
-    
+
     referral_code = input("Masukkan referral code: ")
 
     for _ in range(jumlah_pendaftaran):
